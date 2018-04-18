@@ -15,8 +15,8 @@
 // Please review the Licences for the specific language governing permissions and limitations
 // relating to use of the SAFE Network Software.
 
+use super::message_state::MessageState;
 use id::Id;
-use message_state::MessageState;
 use messages::GossipRpc;
 use std::{cmp, mem, u64};
 use std::collections::{BTreeMap, BTreeSet};

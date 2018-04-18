@@ -16,11 +16,11 @@
 // relating to use of the SAFE Network Software.
 
 use super::gossip::{Gossip, Statistics};
-use super::messages::{GossipRpc, Message};
 use ed25519_dalek::{Keypair, PublicKey};
 use error::Error;
 use id::Id;
 use maidsafe_utilities::serialisation;
+use messages::{GossipRpc, Message};
 use rand::{self, Rng};
 use serde::ser::Serialize;
 use sha3::Sha3_512;

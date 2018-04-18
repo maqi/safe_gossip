@@ -53,13 +53,11 @@ extern crate sha3;
 extern crate unwrap;
 
 mod error;
-mod gossip;
-mod gossiper;
+mod push_and_pull;
+mod push_only;
 mod id;
 mod messages;
-mod message_state;
 
 pub use error::Error;
-pub use gossip::Statistics;
-pub use gossiper::Gossiper;
 pub use id::Id;
+pub use push_and_pull::{Gossiper, Statistics};
