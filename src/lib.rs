@@ -57,8 +57,6 @@
     non_camel_case_types
 )]
 
-#[cfg(test)]
-extern crate itertools;
 #[macro_use]
 extern crate log;
 #[macro_use]
@@ -73,10 +71,9 @@ mod error;
 mod gossip;
 mod gossiper;
 mod id;
-mod messages;
 mod message_state;
+mod messages;
 
 pub use crate::error::Error;
-pub use crate::gossip::Statistics;
 pub use crate::gossiper::Gossiper;
 pub use crate::id::Id;
