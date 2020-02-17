@@ -66,6 +66,5 @@ mod message_state;
 mod messages;
 
 pub use crate::error::Error;
-pub use crate::gossip::Statistics;
 pub use crate::gossiper::Gossiper;
 pub use crate::id::Id;

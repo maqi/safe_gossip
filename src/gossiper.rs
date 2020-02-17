@@ -7,7 +7,7 @@
 // specific language governing permissions and limitations relating to use of the SAFE Network
 // Software.
 
-use super::gossip::{Gossip, Statistics};
+use super::gossip::Gossip;
 use super::messages::{GossipType, Message};
 use crate::error::Error;
 use crate::id::Id;
@@ -96,13 +96,8 @@ impl Gossiper {
         self.gossip.messages()
     }
 
-    /// Returns the statistics of this gossiper.
-    pub fn statistics(&self) -> Statistics {
-        self.gossip.statistics()
-    }
-
     #[cfg(test)]
-    /// Clear the statistics and gossip's cache.
+    /// Clear the gossiping cache.
     pub fn clear(&mut self) {
         self.gossip.clear();
     }
@@ -142,10 +137,10 @@ impl Debug for Gossiper {
 mod tests {
     use super::*;
     use itertools::Itertools;
-    use rand::seq::SliceRandom;
     use rand::{self, Rng};
     use std::collections::BTreeMap;
-    use std::{cmp, u64};
+    use std::u64;
+    use unwrap::unwrap;
 
     fn create_network(node_count: u32) -> Vec<Gossiper> {
         let mut gossipers = std::iter::repeat_with(Gossiper::default)
@@ -163,7 +158,7 @@ mod tests {
         gossipers
     }
 
-    fn send_messages(gossipers: &mut Vec<Gossiper>, num_of_msgs: u32) -> (u64, u64, Statistics) {
+    fn send_messages(gossipers: &mut Vec<Gossiper>, num_of_msgs: u32) -> (u64, u64) {
         let mut rng = rand::thread_rng();
         let empty_rpc_len = unwrap!(Message::serialise(
             &GossipType::Push {
@@ -229,15 +224,10 @@ mod tests {
             }
         }
 
-        let mut statistics = Statistics::default();
         let mut nodes_missed = 0;
         let mut msgs_missed = 0;
         // Checking nodes missed the message, and clear the nodes for the next iteration.
         for gossiper in gossipers.iter_mut() {
-            let stat = gossiper.statistics();
-            statistics.add(&stat);
-            statistics.rounds = stat.rounds;
-
             if gossiper.messages().len() as u32 != num_of_msgs {
                 nodes_missed += 1;
                 msgs_missed += u64::from(num_of_msgs - gossiper.messages().len() as u32);
@@ -245,104 +235,7 @@ mod tests {
             gossiper.clear();
         }
 
-        // The empty push & pull sent during the last round to confirm the gossiping is completed
-        // shall not be included in the statistics.
-        statistics.empty_pull_sent -= gossipers.len() as u64;
-        statistics.empty_push_sent -= gossipers.len() as u64;
-
-        (nodes_missed, msgs_missed, statistics)
-    }
-
-    fn one_message_test(num_of_nodes: u32) {
-        let mut gossipers = create_network(num_of_nodes);
-        println!("Network of {} nodes:", num_of_nodes);
-        let iterations = 1000;
-        let mut metrics = Vec::new();
-        for _ in 0..iterations {
-            metrics.push(send_messages(&mut gossipers, 1));
-        }
-
-        let mut stats_avg = Statistics::default();
-        let mut stats_max = Statistics::default();
-        let mut stats_min = Statistics::new_max();
-        let mut nodes_missed_avg = 0.0;
-        let mut nodes_missed_max = 0;
-        let mut nodes_missed_min = u64::MAX;
-        let mut msgs_missed_avg = 0.0;
-        let mut msgs_missed_max = 0;
-        let mut msgs_missed_min = u64::MAX;
-
-        for (nodes_missed, msgs_missed, stats) in metrics {
-            nodes_missed_avg += nodes_missed as f64;
-            nodes_missed_max = cmp::max(nodes_missed_max, nodes_missed);
-            nodes_missed_min = cmp::min(nodes_missed_min, nodes_missed);
-            msgs_missed_avg += msgs_missed as f64;
-            msgs_missed_max = cmp::max(msgs_missed_max, msgs_missed);
-            msgs_missed_min = cmp::min(msgs_missed_min, msgs_missed);
-            stats_avg.add(&stats);
-            stats_max.max(&stats);
-            stats_min.min(&stats);
-        }
-        nodes_missed_avg /= iterations as f64;
-        msgs_missed_avg /= iterations as f64;
-        stats_avg.rounds /= iterations;
-        stats_avg.empty_pull_sent /= iterations;
-        stats_avg.empty_push_sent /= iterations;
-        stats_avg.full_message_sent /= iterations;
-        stats_avg.full_message_received /= iterations;
-
-        print!("    AVERAGE ---- ");
-        print_metric(
-            nodes_missed_avg,
-            msgs_missed_avg,
-            &stats_avg,
-            num_of_nodes,
-            1,
-        );
-        print!("    MIN -------- ");
-        print_metric(
-            nodes_missed_min as f64,
-            msgs_missed_min as f64,
-            &stats_min,
-            num_of_nodes,
-            1,
-        );
-        print!("    MAX -------- ");
-        print_metric(
-            nodes_missed_max as f64,
-            msgs_missed_max as f64,
-            &stats_max,
-            num_of_nodes,
-            1,
-        );
-    }
-
-    fn print_metric(
-        nodes_missed: f64,
-        msgs_missed: f64,
-        stats: &Statistics,
-        num_of_nodes: u32,
-        num_of_msgs: u32,
-    ) {
-        println!(
-            "rounds: {}, empty_pulls: {}, empty_pushes: {}, full_msgs_sent: {}, msgs_missed: {} \
-             ({:.2}%), nodes_missed: {} ({:.2}%)",
-            stats.rounds,
-            stats.empty_pull_sent,
-            stats.empty_push_sent,
-            stats.full_message_sent,
-            msgs_missed,
-            100.0 * msgs_missed / f64::from(num_of_nodes) / f64::from(num_of_msgs),
-            nodes_missed,
-            100.0 * nodes_missed / f64::from(num_of_nodes) / f64::from(num_of_msgs)
-        );
-    }
-
-    #[test]
-    fn one_message() {
-        one_message_test(20);
-        one_message_test(200);
-        one_message_test(2000);
+        (nodes_missed, msgs_missed)
     }
 
     #[test]
@@ -357,8 +250,18 @@ mod tests {
                 );
                 let mut gossipers = create_network(*nodes);
                 let metric = send_messages(&mut gossipers, *msgs);
-                print_metric(metric.0 as f64, metric.1 as f64, &metric.2, *nodes, *msgs);
+                print_metric(metric.0 as f64, metric.1 as f64, *nodes, *msgs);
             }
         }
+    }
+
+    fn print_metric(nodes_missed: f64, msgs_missed: f64, num_of_nodes: u32, num_of_msgs: u32) {
+        println!(
+            "msgs_missed: {} ({:.2}%), nodes_missed: {} ({:.2}%)",
+            msgs_missed,
+            100.0 * msgs_missed / f64::from(num_of_nodes) / f64::from(num_of_msgs),
+            nodes_missed,
+            100.0 * nodes_missed / f64::from(num_of_nodes) / f64::from(num_of_msgs)
+        );
     }
 }
