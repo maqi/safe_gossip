@@ -88,13 +88,6 @@ impl Gossip {
             })
             .collect();
         self.peers_in_this_round.clear();
-        // Sends an empty Push in case of nothing to push. It acts as a fetch request to peer.
-        if push_list.is_empty() {
-            push_list.push(GossipType::Push {
-                msg: Vec::new(),
-                counter: 0,
-            });
-        }
         push_list
     }
 
@@ -110,7 +103,7 @@ impl Gossip {
         // Collect any responses required.
         let is_new_this_round = self.peers_in_this_round.insert(peer_id);
         let responses = if is_new_this_round && is_push {
-            let mut responses: Vec<GossipType> = self
+            let responses: Vec<GossipType> = self
                 .messages
                 .iter()
                 .filter_map(|(message, state)| {
@@ -121,13 +114,6 @@ impl Gossip {
                     })
                 })
                 .collect();
-            // Empty Pull notifies the peer that all messages in this node was in State A.
-            if responses.is_empty() {
-                responses.push(GossipType::Pull {
-                    msg: Vec::new(),
-                    counter: 0,
-                });
-            }
             responses
         } else {
             vec![]
