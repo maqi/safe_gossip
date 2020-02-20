@@ -264,4 +264,73 @@ mod tests {
             100.0 * nodes_missed / f64::from(num_of_nodes) / f64::from(num_of_msgs)
         );
     }
+
+    #[test]
+    fn prove_of_stop() {
+        let mut gossipers = create_network(20);
+        let num_of_msgs = 100;
+
+        let mut rng = rand::thread_rng();
+
+        let mut rumors: Vec<String> = Vec::new();
+        for _ in 0..num_of_msgs {
+            let mut raw = [0u8; 20];
+            rng.fill(&mut raw[..]);
+            rumors.push(String::from_utf8_lossy(&raw).to_string());
+        }
+
+        let mut rounds = 0;
+        // Polling
+        let mut processed = true;
+        while processed {
+            rounds += 1;
+            processed = false;
+            let mut messages = BTreeMap::new();
+            // Call `next_round()` on each node to gather a list of all Push RPCs.
+            for gossiper in gossipers.iter_mut() {
+                if !rumors.is_empty() && rng.gen() {
+                    let rumor = unwrap!(rumors.pop());
+                    let _ = gossiper.send_new(&rumor);
+                }
+                let (dst_id, push_msgs) = unwrap!(gossiper.next_round());
+                if !push_msgs.is_empty() {
+                    processed = true;
+                }
+                let _ = messages.insert((gossiper.id(), dst_id), push_msgs);
+            }
+
+            // Send all Push RPCs and the corresponding Pull RPCs.
+            for ((src_id, dst_id), push_msgs) in messages {
+                let mut pull_msgs = vec![];
+                {
+                    let dst = unwrap!(gossipers.iter_mut().find(|node| node.id() == dst_id));
+                    // Only the first Push from this peer should return any Pulls.
+                    for (index, push_msg) in push_msgs.into_iter().enumerate() {
+                        if index == 0 {
+                            pull_msgs = dst.handle_received_message(&src_id, &push_msg);
+                        } else {
+                            assert!(dst.handle_received_message(&src_id, &push_msg).is_empty());
+                        }
+                    }
+                }
+                let src = unwrap!(gossipers.iter_mut().find(|node| node.id() == src_id));
+                for pull_msg in pull_msgs {
+                    assert!(src.handle_received_message(&dst_id, &pull_msg).is_empty());
+                }
+            }
+        }
+
+        let mut nodes_missed = 0;
+        // Checking nodes missed the message.
+        for gossiper in gossipers.iter() {
+            if gossiper.messages().len() as u32 != num_of_msgs {
+                nodes_missed += 1;
+            }
+        }
+
+        println!(
+            "gossiping stopped after {:?} rounds, with {} nodes missed the message",
+            rounds, nodes_missed
+        );
+    }
 }
